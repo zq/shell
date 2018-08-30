@@ -1,11 +1,11 @@
 #!/bin/bash
 
-apt -y install unzip
+# apt -y install unzip
 
 # install besttrace
 if [ ! -f "besttrace" ]; then
-    wget https://cdn.ipip.net/17mon/besttrace4linux.zip
-    unzip besttrace4linux.zip
+    wget https://github.com/zq/shell/raw/master/besttrace
+    # unzip besttrace4linux.zip
     chmod +x besttrace
 fi
 
