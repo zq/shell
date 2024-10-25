@@ -23,6 +23,6 @@ ip_addr=(北京电信 上海电信 深圳电信 北京联通 上海联通 深圳
 for i in {0..9}
 do
 	echo ${ip_addr[$i]}
-	nexttrace ${ip_list[$i]}
+	nexttrace -M ${ip_list[$i]}
 	next
 done
