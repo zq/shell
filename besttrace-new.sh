@@ -1,10 +1,11 @@
 #!/bin/bash
 
 # =========================================================
-# 搬瓦工中文网 - VPS 线路智能甄别系统 (v4.7 标题统一版)
+# 搬瓦工中文网 - VPS 线路智能甄别系统 (v4.8 路由逻辑重构版)
 # 更新日志：
-# 1. 统一启动菜单与汇总表的标题为 "VPS 回程路由测评汇总"
-# 2. 重新校准标题行对齐 (视觉宽度35 + 左右各12空格 = 59)
+# 1. 重构线路分析引擎：不再依赖目标ISP进行隔离判断
+# 2. 支持识别"跨网路由" (如联通走CN2 GIA、电信走CMI等)
+# 3. 采用"特征优先级"算法：GIA/9929/CMIN2 > GT/4837/CMI > 普通
 # =========================================================
 
 # 定义颜色
@@ -48,82 +49,103 @@ next() {
     echo -e "${SKYBLUE}----------------------------------------------------------------------${PLAIN}"
 }
 
-# 3. 核心分析逻辑
+# 3. 核心分析逻辑 (重构版 - 全局特征优先)
 analyze_route() {
     local log_content=$1
-    local isp_type=$2
+    local isp_type=$2   # 目标 IP 的运营商类型 (仅用于分类和兜底)
     local target_name=$3
     local target_ip=$4
     
+    # 1. 清洗日志
     local clean_content=$(echo "$log_content" | sed 's/\x1b\[[0-9;]*m//g')
     
+    # 2. 提取特征标记 (全网扫描)
     local has_as4809=$(echo "$clean_content" | grep -E "AS4809|59\.43\.")
     local has_as9929=$(echo "$clean_content" | grep -E "AS9929|99\.29\.|AS10099")
     local has_as4837=$(echo "$clean_content" | grep -E "AS4837|219\.158\.")
     local has_cmin2=$(echo "$clean_content" | grep -E "AS58453")
+    local has_cmi=$(echo "$clean_content" | grep -E "AS9808|223\.120\.")
     
+    # 3. 提取国内段特征 (用于区分 GIA/GT)
     local domestic_segment=$(echo "$clean_content" | grep -iE "China|CN|Beijing|Shanghai|Guangzhou|Shenzhen|Chengdu|Anhui|Sichuan|Guangdong")
     local domestic_has_4809=$(echo "$domestic_segment" | grep -E "AS4809|59\.43\.")
 
     local ret_color_type=""
+    local detail_info=""
 
-    echo -e "${YELLOW}>>> [智能分析] 线路判定 (目标: $isp_type)：${PLAIN}"
+    echo -e "${YELLOW}>>> [智能分析] 线路判定 (目标归属: $isp_type)：${PLAIN}"
 
-    case $isp_type in
-        "CT") # 电信
-            if [ -n "$has_as4809" ]; then
-                if [ -n "$domestic_has_4809" ]; then
-                    echo -e "   类型：${GREEN}${BOLD}电信 CN2 GIA (AS4809)${PLAIN}"
-                    echo -e "   详情：国际与国内全程 CN2，顶级线路。"
-                    ret_color_type="${GREEN}CN2 GIA${PLAIN}"
-                else
-                    echo -e "   类型：${YELLOW}${BOLD}电信 CN2 GT (Global Transit)${PLAIN}"
-                    echo -e "   详情：仅国际段 CN2，回国切换 163。"
-                    ret_color_type="${YELLOW}CN2 GT${PLAIN}"
-                fi
-            else
+    # ==============================================================
+    # 路由判定逻辑瀑布流 (Priority Waterfall)
+    # 优先级：GIA > 9929 > CMIN2 > GT > 4837 > CMI > 普通
+    # ==============================================================
+
+    # --- T0: 顶级线路检测 ---
+    if [ -n "$domestic_has_4809" ]; then
+        # 只要国内段出现 59.43，判定为 CN2 GIA (无论目标是哪家)
+        echo -e "   类型：${GREEN}${BOLD}电信 CN2 GIA (AS4809)${PLAIN}"
+        echo -e "   详情：检测到回程国内段走 AS4809，顶级线路。"
+        ret_color_type="${GREEN}CN2 GIA${PLAIN}"
+        
+    elif [ -n "$has_as9929" ]; then
+        # 检测到 AS9929
+        echo -e "   类型：${GREEN}${BOLD}联通 9929 (CU Premium)${PLAIN}"
+        echo -e "   详情：检测到 AS9929 (联通A网) 骨干。"
+        ret_color_type="${GREEN}联通 9929${PLAIN}"
+
+    elif [ -n "$has_cmin2" ]; then
+        # 检测到 CMIN2
+        echo -e "   类型：${GREEN}${BOLD}移动 CMIN2 (AS58453)${PLAIN}"
+        echo -e "   详情：检测到移动高端专线 AS58453。"
+        ret_color_type="${GREEN}移动 CMIN2${PLAIN}"
+
+    # --- T1: 优质/中端线路检测 ---
+    elif [ -n "$has_as4809" ]; then
+        # 有 4809 但国内段没有 -> CN2 GT
+        echo -e "   类型：${YELLOW}${BOLD}电信 CN2 GT (Global Transit)${PLAIN}"
+        echo -e "   详情：仅国际段走 AS4809，回国切入 163 骨干。"
+        ret_color_type="${YELLOW}CN2 GT${PLAIN}"
+
+    elif [ -n "$has_as4837" ]; then
+        # 检测到 4837
+        echo -e "   类型：${SKYBLUE}联通 4837 (169 Backbone)${PLAIN}"
+        echo -e "   详情：联通民用骨干网，性价比高。"
+        ret_color_type="${SKYBLUE}联通 4837${PLAIN}"
+
+    elif [ -n "$has_cmi" ]; then
+        # 检测到 CMI (AS9808国际)
+        # 即使目标是电信，如果走了 CMI，也标记为移动 CMI (跨网)
+        echo -e "   类型：${SKYBLUE}移动 CMI (AS9808)${PLAIN}"
+        echo -e "   详情：走移动国际线路 (CMI)。"
+        ret_color_type="${SKYBLUE}移动 CMI${PLAIN}"
+
+    # --- T2: 兜底判定 (根据目标 ISP 判定普通线路) ---
+    else
+        case $isp_type in
+            "CT")
                 echo -e "   类型：${RED}电信 163 骨干网 (AS4134)${PLAIN}"
                 ret_color_type="${RED}163 骨干${PLAIN}"
-            fi
-            ;;
-        "CU") # 联通
-            if [ -n "$has_as9929" ]; then
-                echo -e "   类型：${GREEN}${BOLD}联通 AS9929 (CU Premium)${PLAIN}"
-                echo -e "   详情：联通 A 网，对标 CN2 GIA。"
-                ret_color_type="${GREEN}联通 9929${PLAIN}"
-            elif [ -n "$has_as4837" ]; then
-                echo -e "   类型：${SKYBLUE}联通 AS4837 (169骨干)${PLAIN}"
-                ret_color_type="${SKYBLUE}联通 4837${PLAIN}"
-            else
-                echo -e "   类型：联通普通线路"
+                ;;
+            "CU")
+                echo -e "   类型：${RED}联通普通线路${PLAIN}"
                 ret_color_type="联通普通"
-            fi
-            ;;
-        "CM") # 移动
-            if [ -n "$has_cmin2" ]; then
-                 echo -e "   类型：${GREEN}${BOLD}移动 CMIN2 (AS58453)${PLAIN}"
-                 echo -e "   详情：移动高端专线，对标 GIA。"
-                 ret_color_type="${GREEN}移动 CMIN2${PLAIN}"
-            elif echo "$clean_content" | grep -qE "AS9808|223\.120\."; then
-                 echo -e "   类型：${SKYBLUE}移动 CMI (AS9808)${PLAIN}"
-                 echo -e "   详情：移动国际互联或骨干网。"
-                 ret_color_type="${SKYBLUE}移动 CMI${PLAIN}"
-            else
-                 echo -e "   类型：移动普通线路"
-                 ret_color_type="${PURPLE}移动普通${PLAIN}"
-            fi
-            ;;
-        "EDU") # 教育网
-             echo -e "   类型：${SKYBLUE}教育网 (CERNET)${PLAIN}"
-             ret_color_type="${SKYBLUE}教育网${PLAIN}"
-             ;;
-        *)
-            echo -e "   类型：其他/未知网络"
-            ret_color_type="其他网络"
-            ;;
-    esac
+                ;;
+            "CM")
+                echo -e "   类型：${PURPLE}移动普通线路${PLAIN}"
+                ret_color_type="${PURPLE}移动普通${PLAIN}"
+                ;;
+            "EDU")
+                echo -e "   类型：${SKYBLUE}教育网 (CERNET)${PLAIN}"
+                ret_color_type="${SKYBLUE}教育网${PLAIN}"
+                ;;
+            *)
+                echo -e "   类型：其他/混合网络"
+                ret_color_type="其他网络"
+                ;;
+        esac
+    fi
 
-    # === 构建汇总行 ===
+    # === 构建汇总行 (对齐逻辑) ===
     local name_len=${#target_name}
     local pad_spaces=""
     if [[ $name_len -eq 4 ]]; then pad_spaces="        "; fi
@@ -197,11 +219,8 @@ isp_codes=("CT" "CU" "CM" "CT" "CU" "CM" "CT" "CU" "CM" "CT" "CU" "CM" "EDU")
 clear
 # === 头部 Banner 更新 (标题统一) ===
 echo -e "${GREEN}#############################################################${PLAIN}"
-# 标题行: # + 12空 + 文字(视觉35) + 12空 + # = 61
 echo -e "${GREEN}#            搬瓦工中文网 - VPS 回程路由测评汇总            #${PLAIN}"
-# 链接行: # + 3空 + 文字(53) + 3空 + # = 61
 echo -e "${GREEN}#   (https://www.bandwagonhost.net | https://www.bwg.net)   #${PLAIN}"
-# 命令行: # + 10空 + 文字(39) + 10空 + # = 61
 echo -e "${GREEN}#          使用方法：wget -qO- besttrace.sh | bash          #${PLAIN}"
 echo -e "${GREEN}#############################################################${PLAIN}"
 
