@@ -1,10 +1,10 @@
 #!/bin/bash
 
 # =========================================================
-# 搬瓦工中文网 - VPS 线路智能甄别系统 (v4.4 权限检查版)
+# 搬瓦工中文网 - VPS 线路智能甄别系统 (v4.7 标题统一版)
 # 更新日志：
-# 1. 新增 Root 权限检测
-# 2. 如果非 Root 运行，自动提示切换方法并终止
+# 1. 统一启动菜单与汇总表的标题为 "VPS 回程路由测评汇总"
+# 2. 重新校准标题行对齐 (视觉宽度35 + 左右各12空格 = 59)
 # =========================================================
 
 # 定义颜色
@@ -23,9 +23,7 @@ ROWS_CM=()
 ROWS_EDU=()
 ROWS_OTHER=()
 
-# =========================================================
-# 0. 权限检查 (核心新增)
-# =========================================================
+# 0. 权限检查
 if [[ $EUID -ne 0 ]]; then
     clear
     echo -e "${RED}#############################################################${PLAIN}"
@@ -34,12 +32,8 @@ if [[ $EUID -ne 0 ]]; then
     echo -e "${RED}#                                                           #${PLAIN}"
     echo -e "${RED}#############################################################${PLAIN}"
     echo ""
-    echo -e "当前用户非 Root，导致无法安装依赖或执行路由追踪。"
-    echo ""
     echo -e "请尝试执行以下命令切换到 Root 用户："
     echo -e "${GREEN}sudo -i${PLAIN}"
-    echo ""
-    echo -e "切换成功后，请重新运行脚本命令。"
     exit 1
 fi
 
@@ -129,10 +123,9 @@ analyze_route() {
             ;;
     esac
 
-    # === 构建汇总行 (视觉对齐修正算法) ===
+    # === 构建汇总行 ===
     local name_len=${#target_name}
     local pad_spaces=""
-    
     if [[ $name_len -eq 4 ]]; then pad_spaces="        "; fi
     if [[ $name_len -eq 5 ]]; then pad_spaces="      "; fi
     if [[ $name_len -eq 3 ]]; then pad_spaces="          "; fi
@@ -161,12 +154,13 @@ detect_isp_type() {
 # 辅助函数：打印最终汇总表
 print_final_summary() {
     echo ""
-    # 边框: 61 字符
     echo -e "${GREEN}#############################################################${PLAIN}"
-    # 标题行: # + 14空 + 文字(视觉31) + 14空 + # = 61
-    echo -e "${GREEN}#              搬瓦工中文网 - 全网路由测评汇总              #${PLAIN}"
-    # 网址行: # + 3空 + 文字(长度53) + 3空 + # = 61
+    # 标题行: # + 12空 + 文字(视觉35) + 12空 + # = 61
+    echo -e "${GREEN}#            搬瓦工中文网 - VPS 回程路由测评汇总            #${PLAIN}"
+    # 链接行 (53宽 + 3空*2 = 59)
     echo -e "${GREEN}#   (https://www.bandwagonhost.net | https://www.bwg.net)   #${PLAIN}"
+    # 使用方法行 (视觉39宽 + 10空*2 = 59)
+    echo -e "${GREEN}#          使用方法：wget -qO- besttrace.sh | bash          #${PLAIN}"
     echo -e "${GREEN}#############################################################${PLAIN}"
     
     echo -e "节点名称         IP 地址            线路类型"
@@ -201,9 +195,16 @@ isp_codes=("CT" "CU" "CM" "CT" "CU" "CM" "CT" "CU" "CM" "CT" "CU" "CM" "EDU")
 
 # 5. 交互菜单逻辑
 clear
-echo -e "${GREEN}#######################################################${PLAIN}"
-echo -e "${GREEN}#          搬瓦工中文网 - 智能测评工具箱 v4.4         #${PLAIN}"
-echo -e "${GREEN}#######################################################${PLAIN}"
+# === 头部 Banner 更新 (标题统一) ===
+echo -e "${GREEN}#############################################################${PLAIN}"
+# 标题行: # + 12空 + 文字(视觉35) + 12空 + # = 61
+echo -e "${GREEN}#            搬瓦工中文网 - VPS 回程路由测评汇总            #${PLAIN}"
+# 链接行: # + 3空 + 文字(53) + 3空 + # = 61
+echo -e "${GREEN}#   (https://www.bandwagonhost.net | https://www.bwg.net)   #${PLAIN}"
+# 命令行: # + 10空 + 文字(39) + 10空 + # = 61
+echo -e "${GREEN}#          使用方法：wget -qO- besttrace.sh | bash          #${PLAIN}"
+echo -e "${GREEN}#############################################################${PLAIN}"
+
 echo -e "请选择测试模式："
 echo -e "${GREEN}0.${PLAIN} 测试所有节点 (默认 - 直接回车)"
 echo -e "${SKYBLUE}1.${PLAIN} 仅测试 电信 (China Telecom)"
@@ -212,8 +213,6 @@ echo -e "${SKYBLUE}3.${PLAIN} 仅测试 移动 (China Mobile)"
 echo -e "${SKYBLUE}4.${PLAIN} 仅测试 教育网 (Education)"
 echo -e "${YELLOW}5.${PLAIN} 自定义 IP 测试 (自动识别运营商)"
 echo ""
-
-# 强制从 /dev/tty 读取
 read -p "请输入选项 [0-5]: " choice < /dev/tty
 
 if [[ -z "$choice" ]]; then choice="0"; fi
