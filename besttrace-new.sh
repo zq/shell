@@ -1,10 +1,10 @@
 #!/bin/bash
 
 # =========================================================
-# 搬瓦工中文网 - VPS 线路智能甄别系统 (v4.3 管道兼容版)
+# 搬瓦工中文网 - VPS 线路智能甄别系统 (v4.4 权限检查版)
 # 更新日志：
-# 1. 修正交互逻辑，支持 curl/wget | bash 管道一键运行
-# 2. 强制 read 命令读取 /dev/tty
+# 1. 新增 Root 权限检测
+# 2. 如果非 Root 运行，自动提示切换方法并终止
 # =========================================================
 
 # 定义颜色
@@ -22,6 +22,26 @@ ROWS_CU=()
 ROWS_CM=()
 ROWS_EDU=()
 ROWS_OTHER=()
+
+# =========================================================
+# 0. 权限检查 (核心新增)
+# =========================================================
+if [[ $EUID -ne 0 ]]; then
+    clear
+    echo -e "${RED}#############################################################${PLAIN}"
+    echo -e "${RED}#                                                           #${PLAIN}"
+    echo -e "${RED}#  错误：本脚本需要 Root 权限才能正常运行！                 #${PLAIN}"
+    echo -e "${RED}#                                                           #${PLAIN}"
+    echo -e "${RED}#############################################################${PLAIN}"
+    echo ""
+    echo -e "当前用户非 Root，导致无法安装依赖或执行路由追踪。"
+    echo ""
+    echo -e "请尝试执行以下命令切换到 Root 用户："
+    echo -e "${GREEN}sudo -i${PLAIN}"
+    echo ""
+    echo -e "切换成功后，请重新运行脚本命令。"
+    exit 1
+fi
 
 # 1. 环境检查与安装
 if [ ! -f "/usr/local/bin/nexttrace" ]; then
@@ -182,7 +202,7 @@ isp_codes=("CT" "CU" "CM" "CT" "CU" "CM" "CT" "CU" "CM" "CT" "CU" "CM" "EDU")
 # 5. 交互菜单逻辑
 clear
 echo -e "${GREEN}#######################################################${PLAIN}"
-echo -e "${GREEN}#          搬瓦工中文网 - 智能测评工具箱 v4.3         #${PLAIN}"
+echo -e "${GREEN}#          搬瓦工中文网 - 智能测评工具箱 v4.4         #${PLAIN}"
 echo -e "${GREEN}#######################################################${PLAIN}"
 echo -e "请选择测试模式："
 echo -e "${GREEN}0.${PLAIN} 测试所有节点 (默认 - 直接回车)"
@@ -192,7 +212,8 @@ echo -e "${SKYBLUE}3.${PLAIN} 仅测试 移动 (China Mobile)"
 echo -e "${SKYBLUE}4.${PLAIN} 仅测试 教育网 (Education)"
 echo -e "${YELLOW}5.${PLAIN} 自定义 IP 测试 (自动识别运营商)"
 echo ""
-# 关键修改：强制从 /dev/tty 读取，忽略管道输入
+
+# 强制从 /dev/tty 读取
 read -p "请输入选项 [0-5]: " choice < /dev/tty
 
 if [[ -z "$choice" ]]; then choice="0"; fi
@@ -209,7 +230,6 @@ esac
 
 if [[ "$choice" == "5" ]]; then
     echo ""
-    # 关键修改：强制从 /dev/tty 读取
     read -p "请输入目标 IP: " custom_ip < /dev/tty
     echo -e "\n正在测试: ${GREEN}自定义测速点${PLAIN} [${custom_ip}]"
     nexttrace "$custom_ip" -q 1 -M | tee /tmp/nt_temp.log
