@@ -1,10 +1,26 @@
+这是为您更新的 **v5.0 旗舰版**。
+
+已按照您的要求，将**脚本启动菜单**和**最终汇总表**的 Banner 内容全部更新，并进行了像素级的对齐计算，确保在 **61 字符**宽的边框内视觉完美居中。
+
+### 搬瓦工中文网 - 智能测评脚本 v5.0 (旗舰版)
+
+**对齐计算说明（供参考）：**
+
+1.  **标题行**：`BestTrace.sh - Linux VPS 回程路由一键测试` (视觉宽度 41) -\> 左右各补 **9 空格**。
+2.  **方法行**：`使用方法：wget -qO- besttrace.sh | bash` (视觉宽度 39) -\> 左右各补 **10 空格**。
+3.  **网址行**：`官网地址：https://besttrace.sh | https://bwg.net` (视觉宽度 48) -\> 左补 **5 空格**，右补 **6 空格**。
+
+<!-- end list -->
+
+```bash
 #!/bin/bash
 
 # =========================================================
-# 搬瓦工中文网 - VPS 线路智能甄别系统 (v4.9 移动修正版)
+# BestTrace.sh - Linux VPS 回程路由一键测试 (v5.0 旗舰版)
+# Powered by 搬瓦工中文网 (https://bwg.net)
 # 更新日志：
-# 1. 修正移动 CMIN2 识别逻辑：AS58453 -> AS58807
-# 2. 将 AS58453 归类为标准 CMI 线路 (AS58453 != CMIN2)
+# 1. 更新 Banner 文案与排版，严格对齐 61 字符边框
+# 2. 包含 v4.9 的所有移动线路修正 (CMIN2/AS58807)
 # =========================================================
 
 # 定义颜色
@@ -48,7 +64,7 @@ next() {
     echo -e "${SKYBLUE}----------------------------------------------------------------------${PLAIN}"
 }
 
-# 3. 核心分析逻辑 (修正移动 ASN 判定)
+# 3. 核心分析逻辑
 analyze_route() {
     local log_content=$1
     local isp_type=$2
@@ -57,18 +73,13 @@ analyze_route() {
     
     local clean_content=$(echo "$log_content" | sed 's/\x1b\[[0-9;]*m//g')
     
-    # --- 特征提取 (严谨版) ---
-    # CN2
+    # --- 特征提取 ---
     local has_as4809=$(echo "$clean_content" | grep -E "AS4809|59\.43\.")
-    
-    # 联通
     local has_as9929=$(echo "$clean_content" | grep -E "AS9929|99\.29\.|AS10099")
     local has_as4837=$(echo "$clean_content" | grep -E "AS4837|219\.158\.")
     
-    # 移动 (关键修正)
-    # CMIN2 必须是 AS58807
+    # 移动线路特征修正
     local has_cmin2=$(echo "$clean_content" | grep -E "AS58807") 
-    # CMI 通常是 AS58453 或 AS9808(境外)
     local has_cmi=$(echo "$clean_content" | grep -E "AS58453|AS9808|223\.120\.")
     
     # 国内段特征
@@ -81,7 +92,7 @@ analyze_route() {
 
     # --- 判定优先级瀑布 ---
 
-    # 1. CN2 GIA (AS4809 国内段) - 最高优先级
+    # 1. CN2 GIA
     if [ -n "$domestic_has_4809" ]; then
         echo -e "   类型：${GREEN}${BOLD}电信 CN2 GIA (AS4809)${PLAIN}"
         echo -e "   详情：检测到回程国内段走 AS4809，顶级线路。"
@@ -93,13 +104,13 @@ analyze_route() {
         echo -e "   详情：检测到 AS9929 (联通A网) 骨干。"
         ret_color_type="${GREEN}联通 9929${PLAIN}"
 
-    # 3. 移动 CMIN2 (AS58807) - 修正点
+    # 3. 移动 CMIN2 (AS58807)
     elif [ -n "$has_cmin2" ]; then
         echo -e "   类型：${GREEN}${BOLD}移动 CMIN2 (AS58807)${PLAIN}"
         echo -e "   详情：检测到移动高端精品网 AS58807。"
         ret_color_type="${GREEN}移动 CMIN2${PLAIN}"
 
-    # 4. CN2 GT (AS4809 仅国际段)
+    # 4. CN2 GT
     elif [ -n "$has_as4809" ]; then
         echo -e "   类型：${YELLOW}${BOLD}电信 CN2 GT (Global Transit)${PLAIN}"
         echo -e "   详情：仅国际段走 AS4809，回国切入 163 骨干。"
@@ -111,7 +122,7 @@ analyze_route() {
         echo -e "   详情：联通民用骨干网。"
         ret_color_type="${SKYBLUE}联通 4837${PLAIN}"
 
-    # 6. 移动 CMI (AS58453/AS9808) - 修正点
+    # 6. 移动 CMI
     elif [ -n "$has_cmi" ]; then
         echo -e "   类型：${SKYBLUE}移动 CMI (AS58453/9808)${PLAIN}"
         echo -e "   详情：走移动国际线路 (CMI)。"
@@ -143,7 +154,7 @@ analyze_route() {
         esac
     fi
 
-    # === 构建汇总行 ===
+    # === 构建汇总行 (视觉对齐) ===
     local name_len=${#target_name}
     local pad_spaces=""
     if [[ $name_len -eq 4 ]]; then pad_spaces="        "; fi
@@ -175,9 +186,12 @@ detect_isp_type() {
 print_final_summary() {
     echo ""
     echo -e "${GREEN}#############################################################${PLAIN}"
-    echo -e "${GREEN}#            搬瓦工中文网 - VPS 回程路由测评汇总            #${PLAIN}"
-    echo -e "${GREEN}#   (https://www.bandwagonhost.net | https://www.bwg.net)   #${PLAIN}"
+    # 标题行: # + 9空 + 文字(34+7=41) + 9空 + # = 61
+    echo -e "${GREEN}#         BestTrace.sh - Linux VPS 回程路由一键测试         #${PLAIN}"
+    # 方法行: # + 10空 + 文字(10+29=39) + 10空 + # = 61
     echo -e "${GREEN}#          使用方法：wget -qO- besttrace.sh | bash          #${PLAIN}"
+    # 网址行: # + 5空 + 文字(10+38=48) + 6空 + # = 61
+    echo -e "${GREEN}#     官网地址：https://besttrace.sh | https://bwg.net      #${PLAIN}"
     echo -e "${GREEN}#############################################################${PLAIN}"
     
     echo -e "节点名称         IP 地址            线路类型"
@@ -212,10 +226,14 @@ isp_codes=("CT" "CU" "CM" "CT" "CU" "CM" "CT" "CU" "CM" "CT" "CU" "CM" "EDU")
 
 # 5. 交互菜单逻辑
 clear
+# === 头部 Banner 更新 (严格对齐) ===
 echo -e "${GREEN}#############################################################${PLAIN}"
-echo -e "${GREEN}#            搬瓦工中文网 - VPS 回程路由测评汇总            #${PLAIN}"
-echo -e "${GREEN}#   (https://www.bandwagonhost.net | https://www.bwg.net)   #${PLAIN}"
+# 标题行: # + 9空 + 文字(41) + 9空 + # = 61
+echo -e "${GREEN}#         BestTrace.sh - Linux VPS 回程路由一键测试         #${PLAIN}"
+# 方法行: # + 10空 + 文字(39) + 10空 + # = 61
 echo -e "${GREEN}#          使用方法：wget -qO- besttrace.sh | bash          #${PLAIN}"
+# 网址行: # + 5空 + 文字(48) + 6空 + # = 61
+echo -e "${GREEN}#     官网地址：https://besttrace.sh | https://bwg.net      #${PLAIN}"
 echo -e "${GREEN}#############################################################${PLAIN}"
 
 echo -e "请选择测试模式："
@@ -290,3 +308,4 @@ if [[ $count -eq 0 ]]; then
 else
     print_final_summary
 fi
+```
