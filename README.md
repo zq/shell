@@ -24,7 +24,7 @@
 
     wget -qO- git.io/besttrace | bash
     
-详情介绍：https://www.bandwagonhost.net/2345.html
+旧版介绍：https://www.bandwagonhost.net/2345.html
     
 ## 一键迁入 DC8（已废弃，不建议使用）
 
